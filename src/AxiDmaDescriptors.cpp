@@ -3,28 +3,30 @@
 //
 #include "AxiDmaDescriptors.h"
 
-
-AxiDmaDescriptors::AxiDmaDescriptors(bool chan) {
-    if (chan) {
+AxiDmaDescriptors::AxiDmaDescriptors(bool chan)
+{
+    if (chan)
+    {
         chain_phys_baseaddr = RX_BASEADDR;
         buffer_phys_baseaddr = RX_BUFFER_BASE;
         isRx = chan;
-    } else {
+    }
+    else
+    {
         chain_phys_baseaddr = TX_BASEADDR;
         buffer_phys_baseaddr = TX_BUFFER_BASE;
     }
 }
 
-
-AxiDmaDescriptors::~AxiDmaDescriptors() {
+AxiDmaDescriptors::~AxiDmaDescriptors()
+{
     munmap(chain_virt_baseaddr, _chain_size);
     close(fd);
-    isRx           = false;
-    _chain_size    = 0;
+    isRx = false;
+    _chain_size = 0;
     bytes_per_desc = BD_OPTIMAL_SIZE;
-    bd_count       = 0;
+    bd_count = 0;
 }
-
 
 /**
  * @brief Set count of bytes per descriptor
@@ -33,11 +35,12 @@ AxiDmaDescriptors::~AxiDmaDescriptors() {
  * @return none
  * @note By default, bytes per descriptor is equal to 3 MByte
  */
-void AxiDmaDescriptors::SetBytesPerDesc(uint32_t value) {
-    if (value == 0) value = BD_OPTIMAL_SIZE;
+void AxiDmaDescriptors::SetBytesPerDesc(uint32_t value)
+{
+    if (value == 0)
+        value = BD_OPTIMAL_SIZE;
     bytes_per_desc = value;
 }
-
 
 /**
  * @brief Get count of descriptors
@@ -45,10 +48,10 @@ void AxiDmaDescriptors::SetBytesPerDesc(uint32_t value) {
  *
  * @return count of descriptors
  */
-int AxiDmaDescriptors::GetCountDescriptors() {
+int AxiDmaDescriptors::GetCountDescriptors()
+{
     return bd_count;
 }
-
 
 /**
  * @brief Get base address of descriptor chain
@@ -56,10 +59,10 @@ int AxiDmaDescriptors::GetCountDescriptors() {
  *
  * @return base (start/head) address of descriptor chain
  */
-uint32_t AxiDmaDescriptors::GetHeadDescriptorAddr() {
+uint32_t AxiDmaDescriptors::GetHeadDescriptorAddr()
+{
     return chain_phys_baseaddr;
 }
-
 
 /**
  * @brief Get tail address of descriptor chain
@@ -67,10 +70,10 @@ uint32_t AxiDmaDescriptors::GetHeadDescriptorAddr() {
  *
  * @return tail (end) addres of descriptor chain
  */
-uint32_t AxiDmaDescriptors::GetTailDescriptorAddr() {
+uint32_t AxiDmaDescriptors::GetTailDescriptorAddr()
+{
     return getTailMem(chain_phys_baseaddr, bd_count);
 }
-
 
 /**
  * @brief Get base address of buffer
@@ -78,10 +81,10 @@ uint32_t AxiDmaDescriptors::GetTailDescriptorAddr() {
  *
  * @return buffer base address
  */
-uint32_t AxiDmaDescriptors::GetBufferBaseAddr() {
+uint32_t AxiDmaDescriptors::GetBufferBaseAddr()
+{
     return buffer_phys_baseaddr;
 }
-
 
 /**
  * @brief Initialize chain of descripors
@@ -96,41 +99,42 @@ uint32_t AxiDmaDescriptors::GetBufferBaseAddr() {
  * @note Calculate count of descriptors by passing @buffer_size.
  *   For @buffer_addr prefer to use @GetBufferBaseAddr().
  */
-int AxiDmaDescriptors::InitDescriptors(uint32_t buffer_addr, size_t buffer_size) {
+int AxiDmaDescriptors::InitDescriptors(uint32_t buffer_addr, size_t buffer_size)
+{
     int status = prepareChain(buffer_size);
     if (status != RING_OK)
         return status;
 
-    auto *curr_descriptor      = (descr_t *)getHeadOfDescriptors();
-    uint32_t _buffer_addr 	   = buffer_addr;
+    auto *curr_descriptor = (descr_t *)getHeadOfDescriptors();
+    uint32_t _buffer_addr = buffer_addr;
     uint32_t next_address_phys = chain_phys_baseaddr;
 
     if (!isRx)
         setSof(curr_descriptor);
 
-    for (auto descrIndex = 0; descrIndex < (bd_count - 1); descrIndex++) {
+    for (auto descrIndex = 0; descrIndex < (bd_count - 1); descrIndex++)
+    {
         next_address_phys = getNextAddress(next_address_phys);
 
         setNextDescrAddr(curr_descriptor, next_address_phys);
-        setBufferAddr   (curr_descriptor, buffer_addr);
-        setStatus       (curr_descriptor, 0x00);
-        setLength       (curr_descriptor, bytes_per_desc);
+        setBufferAddr(curr_descriptor, buffer_addr);
+        setStatus(curr_descriptor, 0x00);
+        setLength(curr_descriptor, bytes_per_desc);
 
-        _buffer_addr    += bytes_per_desc;
+        _buffer_addr += bytes_per_desc;
         curr_descriptor = (descr_t *)getNextAddress(curr_descriptor);
     }
 
     setNextDescrAddr(curr_descriptor, chain_phys_baseaddr);
-    setBufferAddr   (curr_descriptor, _buffer_addr);
-    setStatus       (curr_descriptor, 0x00);
-    setLength       (curr_descriptor, (remainder_size == 0) ? bytes_per_desc
-                                                            : remainder_size);
+    setBufferAddr(curr_descriptor, _buffer_addr);
+    setStatus(curr_descriptor, 0x00);
+    setLength(curr_descriptor, (remainder_size == 0) ? bytes_per_desc
+                                                     : remainder_size);
     if (!isRx)
         setEof(curr_descriptor);
 
     return RING_OK;
 }
-
 
 /**
  * @brief Process descriptor chain. Calculate transmitted data
@@ -139,12 +143,14 @@ int AxiDmaDescriptors::InitDescriptors(uint32_t buffer_addr, size_t buffer_size)
  *
  * @return size - count of transmitted bytes
  */
-size_t AxiDmaDescriptors::ProcessDescriptors(bool soft) {
+size_t AxiDmaDescriptors::ProcessDescriptors(bool soft)
+{
     int proc_descrs = countProcessedDescs();
 
     size_t size = 0;
     auto *curr_descriptor = (descr_t *)getHeadOfDescriptors();
-    for (auto proc_descr_cnt = 0; proc_descr_cnt < proc_descrs; proc_descr_cnt++) {
+    for (auto proc_descr_cnt = 0; proc_descr_cnt < proc_descrs; proc_descr_cnt++)
+    {
         if (isSof(curr_descriptor))
             size = getTransferredLen(curr_descriptor);
         else if (isIof(curr_descriptor))
@@ -162,7 +168,6 @@ size_t AxiDmaDescriptors::ProcessDescriptors(bool soft) {
     return size;
 }
 
-
 /**
  * @brief Get status register of first descriptor in the chain
  * @param none
@@ -170,11 +175,11 @@ size_t AxiDmaDescriptors::ProcessDescriptors(bool soft) {
  * @return status register (0x1C)
  * @note used for debug, may be deprecated
  */
-uint32_t AxiDmaDescriptors::GetStatus() {
+uint32_t AxiDmaDescriptors::GetStatus()
+{
     auto *curr_descriptor = (descr_t *)getHeadOfDescriptors();
     return curr_descriptor->status;
 }
-
 
 /**
  * @brief Check chain used for S2MM
@@ -182,10 +187,10 @@ uint32_t AxiDmaDescriptors::GetStatus() {
  *
  * @return true - chain used for S2MM; false - used for MM2S
  */
-bool AxiDmaDescriptors::IsRx() const {
+bool AxiDmaDescriptors::IsRx() const
+{
     return isRx;
 }
-
 
 /**
  * @brief Prepare chain of descriptors
@@ -197,7 +202,8 @@ bool AxiDmaDescriptors::IsRx() const {
  * @return -ERR_OPEN_FD - can't get access to /dev/mem
  * @return -ERR_MAP     - can't mmap to SG descriptor
  */
-int AxiDmaDescriptors::prepareChain(size_t buffer_size) {
+int AxiDmaDescriptors::prepareChain(size_t buffer_size)
+{
     int bd_cnt = calcDescrCount(bytes_per_desc, buffer_size);
     int status = setDescrCount(bd_cnt);
     if (status != RING_OK)
@@ -215,7 +221,6 @@ int AxiDmaDescriptors::prepareChain(size_t buffer_size) {
     return RING_OK;
 }
 
-
 /**
  * @brief Calculate count of descriptors
  * @param[in] bytes_per_descr - count bytes for 1 descriptor
@@ -223,7 +228,8 @@ int AxiDmaDescriptors::prepareChain(size_t buffer_size) {
  *
  * @return count - count of descriptors
  */
-int AxiDmaDescriptors::calcDescrCount(size_t bytes_per_descr, size_t buffer_size) {
+int AxiDmaDescriptors::calcDescrCount(size_t bytes_per_descr, size_t buffer_size)
+{
     int tail_descriptor = 0;
 
     remainder_size = buffer_size % bytes_per_descr;
@@ -235,7 +241,6 @@ int AxiDmaDescriptors::calcDescrCount(size_t bytes_per_descr, size_t buffer_size
     return count;
 }
 
-
 /**
  * @brief Save count of descriptors
  * @param[in] descriptors_count - count of descriptors
@@ -243,14 +248,14 @@ int AxiDmaDescriptors::calcDescrCount(size_t bytes_per_descr, size_t buffer_size
  * @return  RING_OK   - save was successful
  * @return -ERR_BDCNT - incorrect count of descriptors
  */
-int AxiDmaDescriptors::setDescrCount(int descriptors_count) {
+int AxiDmaDescriptors::setDescrCount(int descriptors_count)
+{
     if (descriptors_count < 1)
         return -ERR_BDCNT;
 
     bd_count = descriptors_count;
     return RING_OK;
 }
-
 
 /**
  * @brief Set size of descriptors chain
@@ -260,7 +265,8 @@ int AxiDmaDescriptors::setDescrCount(int descriptors_count) {
  * @return -ERR_SIZE  - incorrect size
  * @return -ERR_ALIGN - size of descriptor doesn't align
  */
-int AxiDmaDescriptors::setChainSize(size_t chain_size) {
+int AxiDmaDescriptors::setChainSize(size_t chain_size)
+{
     if (chain_size < BD_MIN_ALIGNMENT)
         return -ERR_SIZE;
 
@@ -271,7 +277,6 @@ int AxiDmaDescriptors::setChainSize(size_t chain_size) {
     return RING_OK;
 }
 
-
 /**
  * @brief Allocate (memory mapped) memory for descriptors chain
  * @param none
@@ -280,13 +285,14 @@ int AxiDmaDescriptors::setChainSize(size_t chain_size) {
  * @return -ERR_OPEN_FD - can't get access to /dev/mem
  * @return -ERR_MAP     - can't mmap to descriptor chain
  */
-int AxiDmaDescriptors::allocDescriptorMem() {
+int AxiDmaDescriptors::allocDescriptorMem()
+{
     fd = open("/dev/mem", O_RDWR | O_SYNC);
     if (fd < 0)
         return -ERR_OPEN_FD;
 
-    chain_virt_baseaddr = (uint32_t *) mmap(nullptr, _chain_size, PROT_READ | PROT_WRITE,
-                                             MAP_SHARED, fd, chain_phys_baseaddr);
+    chain_virt_baseaddr = (uint32_t *)mmap(nullptr, _chain_size, PROT_READ | PROT_WRITE,
+                                           MAP_SHARED, fd, chain_phys_baseaddr);
     if (chain_virt_baseaddr == MAP_FAILED)
         return -ERR_MAP;
 
@@ -294,18 +300,17 @@ int AxiDmaDescriptors::allocDescriptorMem() {
     return RING_OK;
 }
 
-
 /**
  * @brief Clear (set 0x00) descriptors chain
  * @param none
  *
  * @return none
  */
-inline void AxiDmaDescriptors::clearMemory() {
+inline void AxiDmaDescriptors::clearMemory()
+{
     auto *bdring_base = (uint32_t *)getHeadOfDescriptors();
     memset(bdring_base, 0x00, _chain_size);
 }
-
 
 /**
  * @brief Get pointer to base address of descriptor's chain
@@ -313,10 +318,10 @@ inline void AxiDmaDescriptors::clearMemory() {
  *
  * @return pointer to descriptor's chain head
  */
-void *AxiDmaDescriptors::getHeadOfDescriptors() const {
+void *AxiDmaDescriptors::getHeadOfDescriptors() const
+{
     return chain_virt_baseaddr;
 }
-
 
 /**
  * @brief Get address of next descriptor
@@ -324,10 +329,10 @@ void *AxiDmaDescriptors::getHeadOfDescriptors() const {
  *
  * @return address of next descriptor in chain
  */
-uint32_t AxiDmaDescriptors::getNextAddress(uint32_t current_address) {
+uint32_t AxiDmaDescriptors::getNextAddress(uint32_t current_address)
+{
     return current_address + BD_MIN_ALIGNMENT;
 }
-
 
 /**
  * @brief Get pointer to address of next descriptor
@@ -335,13 +340,13 @@ uint32_t AxiDmaDescriptors::getNextAddress(uint32_t current_address) {
  *
  * @return pointer to the next descriptor in chain
  */
-void *AxiDmaDescriptors::getNextAddress(void *current_descriptor) const {
-    auto current_addr = reinterpret_cast<std::uintptr_t >(current_descriptor);
-    current_addr     += BD_MIN_ALIGNMENT;
+void *AxiDmaDescriptors::getNextAddress(void *current_descriptor) const
+{
+    auto current_addr = reinterpret_cast<std::uintptr_t>(current_descriptor);
+    current_addr += BD_MIN_ALIGNMENT;
 
     return reinterpret_cast<void *>(current_addr);
 }
-
 
 /**
  * @brief Return tail address of descriptors chain
@@ -350,10 +355,10 @@ void *AxiDmaDescriptors::getNextAddress(void *current_descriptor) const {
  *
  * @return tail address of descriptors chain
  */
-uint32_t AxiDmaDescriptors::getTailMem(std::uintptr_t headmem_addr, int count_descr) {
-    return uint32_t (headmem_addr + ((count_descr - 1) * BD_MIN_ALIGNMENT));
+uint32_t AxiDmaDescriptors::getTailMem(std::uintptr_t headmem_addr, int count_descr)
+{
+    return uint32_t(headmem_addr + ((count_descr - 1) * BD_MIN_ALIGNMENT));
 }
-
 
 /**
  * @brief Get control (0x18) register of descriptor
@@ -361,10 +366,10 @@ uint32_t AxiDmaDescriptors::getTailMem(std::uintptr_t headmem_addr, int count_de
  *
  * @return value of control register
  */
-uint32_t AxiDmaDescriptors::getControl(descr_t *curr_descriptor) {
+uint32_t AxiDmaDescriptors::getControl(descr_t *curr_descriptor)
+{
     return curr_descriptor->control;
 }
-
 
 /**
  * @brief Get status (0x1C) register of descriptor
@@ -372,10 +377,10 @@ uint32_t AxiDmaDescriptors::getControl(descr_t *curr_descriptor) {
  *
  * @return value of status register
  */
-uint32_t AxiDmaDescriptors::getStatus(descr_t *curr_descriptor) {
+uint32_t AxiDmaDescriptors::getStatus(descr_t *curr_descriptor)
+{
     return curr_descriptor->status;
 }
-
 
 /**
  * @brief Write into APP0 (0x20) register head address of descriptors chain
@@ -384,10 +389,10 @@ uint32_t AxiDmaDescriptors::getStatus(descr_t *curr_descriptor) {
  *
  * @return none
  */
-void AxiDmaDescriptors::setHeadMem(descr_t *curr_descriptor, uint32_t headmem) {
+void AxiDmaDescriptors::setHeadMem(descr_t *curr_descriptor, uint32_t headmem)
+{
     setApp0(curr_descriptor, headmem);
 }
-
 
 /**
  * @brief Write into APP1 (0x24) register tail address of descriptors chain
@@ -396,10 +401,10 @@ void AxiDmaDescriptors::setHeadMem(descr_t *curr_descriptor, uint32_t headmem) {
  *
  * @return none
  */
-void AxiDmaDescriptors::setTailMem(descr_t *curr_descriptor, uint32_t tailmem) {
+void AxiDmaDescriptors::setTailMem(descr_t *curr_descriptor, uint32_t tailmem)
+{
     setApp1(curr_descriptor, tailmem);
 }
-
 
 /**
  * @brief Write into APP2 (0x28) register alignment value
@@ -409,10 +414,10 @@ void AxiDmaDescriptors::setTailMem(descr_t *curr_descriptor, uint32_t tailmem) {
  *
  * @return none
  */
-void AxiDmaDescriptors::setAlignMem(descr_t *curr_descriptor, uint32_t alignmem) {
+void AxiDmaDescriptors::setAlignMem(descr_t *curr_descriptor, uint32_t alignmem)
+{
     setApp2(curr_descriptor, alignmem);
 }
-
 
 /**
  * @brief Set address of next descriptor in nxtdesc (0x00) register
@@ -422,10 +427,10 @@ void AxiDmaDescriptors::setAlignMem(descr_t *curr_descriptor, uint32_t alignmem)
  * @return none
  */
 void AxiDmaDescriptors::setNextDescrAddr(descr_t *curr_descriptor,
-                                             uint32_t next_address) {
+                                         uint32_t next_address)
+{
     curr_descriptor->nextdesc = next_address;
 }
-
 
 /**
  * @brief Set address of next buffer in buffer_address (0x08) register
@@ -435,10 +440,10 @@ void AxiDmaDescriptors::setNextDescrAddr(descr_t *curr_descriptor,
  * @return none
  */
 void AxiDmaDescriptors::setBufferAddr(descr_t *curr_descriptor,
-                                          uint32_t buff_address) {
+                                      uint32_t buff_address)
+{
     curr_descriptor->buffer_addr = buff_address;
 }
-
 
 /**
  * @brief Set value into control (0x18) register
@@ -447,10 +452,10 @@ void AxiDmaDescriptors::setBufferAddr(descr_t *curr_descriptor,
  *
  * @return none
  */
-void AxiDmaDescriptors::setControl(descr_t *curr_descriptor, uint32_t control_reg) {
+void AxiDmaDescriptors::setControl(descr_t *curr_descriptor, uint32_t control_reg)
+{
     curr_descriptor->control = control_reg;
 }
-
 
 /**
  * @brief Set value into status (0x1C) register
@@ -459,10 +464,10 @@ void AxiDmaDescriptors::setControl(descr_t *curr_descriptor, uint32_t control_re
  *
  * @return none
  */
-void AxiDmaDescriptors::setStatus(descr_t *curr_descriptor, uint32_t status_reg) {
+void AxiDmaDescriptors::setStatus(descr_t *curr_descriptor, uint32_t status_reg)
+{
     curr_descriptor->status = status_reg;
 }
-
 
 /**
  * @brief Set length of transferring data into control (0x18) register
@@ -472,7 +477,8 @@ void AxiDmaDescriptors::setStatus(descr_t *curr_descriptor, uint32_t status_reg)
  * @return  RING_OK       - length was set
  * @return -ERR_BDMAX_LEN - incorrect length of data
  */
-int AxiDmaDescriptors::setLength(descr_t *curr_descriptor, size_t length) {
+int AxiDmaDescriptors::setLength(descr_t *curr_descriptor, size_t length)
+{
     if (length > BD_MAX_LEN || length == 0)
         return -ERR_BDMAX_LEN;
 
@@ -483,7 +489,6 @@ int AxiDmaDescriptors::setLength(descr_t *curr_descriptor, size_t length) {
     return RING_OK;
 }
 
-
 /**
  * @brief Write data into APP0 (0x20) register
  * @param[in] curr_descr - current descriptor
@@ -492,10 +497,10 @@ int AxiDmaDescriptors::setLength(descr_t *curr_descriptor, size_t length) {
  * @return none
  * @note unused (all app_# funcs), could use for debug
  */
-inline void AxiDmaDescriptors::setApp0(descr_t *curr_descr, uint32_t data) {
+inline void AxiDmaDescriptors::setApp0(descr_t *curr_descr, uint32_t data)
+{
     curr_descr->app_0 = data;
 }
-
 
 /**
  * @brief Write data into APP1 (0x24) register
@@ -504,10 +509,10 @@ inline void AxiDmaDescriptors::setApp0(descr_t *curr_descr, uint32_t data) {
  *
  * @return none
  */
-inline void AxiDmaDescriptors::setApp1(descr_t *curr_descr, uint32_t data) {
+inline void AxiDmaDescriptors::setApp1(descr_t *curr_descr, uint32_t data)
+{
     curr_descr->app_1 = data;
 }
-
 
 /**
  * @brief Write data into APP2 (0x28) register
@@ -516,10 +521,10 @@ inline void AxiDmaDescriptors::setApp1(descr_t *curr_descr, uint32_t data) {
  *
  * @return none
  */
-inline void AxiDmaDescriptors::setApp2(descr_t *curr_descr, uint32_t data) {
+inline void AxiDmaDescriptors::setApp2(descr_t *curr_descr, uint32_t data)
+{
     curr_descr->app_2 = data;
 }
-
 
 /**
  * @brief Set bit of Start of Frame (SoF) in control register
@@ -527,10 +532,10 @@ inline void AxiDmaDescriptors::setApp2(descr_t *curr_descr, uint32_t data) {
  *
  * @return none
  */
-inline void AxiDmaDescriptors::setSof(descr_t *curr_descr) {
+inline void AxiDmaDescriptors::setSof(descr_t *curr_descr)
+{
     curr_descr->control |= BD_STATUS_SOF;
 }
-
 
 /**
  * @brief Set bit of End of Frame (EoF) in control register
@@ -538,10 +543,10 @@ inline void AxiDmaDescriptors::setSof(descr_t *curr_descr) {
  *
  * @return none
  */
-inline void AxiDmaDescriptors::setEof(descr_t *curr_descr) {
+inline void AxiDmaDescriptors::setEof(descr_t *curr_descr)
+{
     curr_descr->control |= BD_STATUS_EOF;
 }
-
 
 /**
  * @brief Get length of tranferred data
@@ -549,10 +554,10 @@ inline void AxiDmaDescriptors::setEof(descr_t *curr_descr) {
  *
  * @return length of transferred data
  */
-uint32_t AxiDmaDescriptors::getTransferredLen(descr_t *curr_descr) {
+uint32_t AxiDmaDescriptors::getTransferredLen(descr_t *curr_descr)
+{
     return (getStatus(curr_descr) & BD_MAX_LEN);
 }
-
 
 /**
  * @brief Get complete bit
@@ -561,10 +566,10 @@ uint32_t AxiDmaDescriptors::getTransferredLen(descr_t *curr_descr) {
  * @return true  - if descriptor is complete
  * @return false - if descriptor not complete
  */
-bool AxiDmaDescriptors::isCompleted(descr_t *curr_descr) {
+bool AxiDmaDescriptors::isCompleted(descr_t *curr_descr)
+{
     return (getStatus(curr_descr) & BD_STATUS_COMP) != 0;
 }
-
 
 /**
  * @brief Get SoF bit
@@ -573,10 +578,10 @@ bool AxiDmaDescriptors::isCompleted(descr_t *curr_descr) {
  * @return true  - if descriptor is SoF
  * @return false - if descriptor not SoF
  */
-inline bool AxiDmaDescriptors::isSof(descr_t *curr_descr) {
+inline bool AxiDmaDescriptors::isSof(descr_t *curr_descr)
+{
     return (curr_descr->status & BD_STATUS_SOF) != 0;
 }
-
 
 /**
  * @brief Get Intermediate of Frame (IoF) bit
@@ -586,10 +591,10 @@ inline bool AxiDmaDescriptors::isSof(descr_t *curr_descr) {
  * @return false - if descriptor not IoF
  * @note IoF - descriptor which not Start and End but complete
  */
-inline bool AxiDmaDescriptors::isIof(descr_t *curr_descr) {
+inline bool AxiDmaDescriptors::isIof(descr_t *curr_descr)
+{
     return (isCompleted(curr_descr) && !isSof(curr_descr) && !isEof(curr_descr));
 }
-
 
 /**
  * @brief Get EoF bit
@@ -598,10 +603,10 @@ inline bool AxiDmaDescriptors::isIof(descr_t *curr_descr) {
  * @return true  - if descriptor is EoF
  * @return false - if descriptor not EoF
  */
-inline bool AxiDmaDescriptors::isEof(descr_t *curr_descr) {
+inline bool AxiDmaDescriptors::isEof(descr_t *curr_descr)
+{
     return (curr_descr->status & BD_STATUS_EOF) != 0;
 }
-
 
 /**
  * @brief Free descriptor (doesn't free memory)
@@ -609,11 +614,11 @@ inline bool AxiDmaDescriptors::isEof(descr_t *curr_descr) {
  *
  * @return none
  */
-inline void AxiDmaDescriptors::freeDescriptor(descr_t *curr_descr) {
+inline void AxiDmaDescriptors::freeDescriptor(descr_t *curr_descr)
+{
     curr_descr->control = 0;
-    curr_descr->status  = 0;
+    curr_descr->status = 0;
 }
-
 
 /**
  * @brief Count completed descriptors
@@ -621,10 +626,12 @@ inline void AxiDmaDescriptors::freeDescriptor(descr_t *curr_descr) {
  *
  * @return count of processed (completed) descriptors
  */
-int AxiDmaDescriptors::countProcessedDescs() {
-    int processed_descrs  = 0;
+int AxiDmaDescriptors::countProcessedDescs()
+{
+    int processed_descrs = 0;
     auto *curr_descriptor = (descr_t *)getHeadOfDescriptors();
-    while(isCompleted(curr_descriptor)) {
+    while (isCompleted(curr_descriptor))
+    {
         processed_descrs++;
         curr_descriptor = (descr_t *)getNextAddress(curr_descriptor);
     }
@@ -632,16 +639,17 @@ int AxiDmaDescriptors::countProcessedDescs() {
     return processed_descrs;
 }
 
-
 /**
  * @brief Show values of descriptors in the chain
  * @param none
  *
  * @return Used for debug
  */
-void AxiDmaDescriptors::DebugDescs() {
+void AxiDmaDescriptors::DebugDescs()
+{
     auto *curr_desc = (descr_t *)getHeadOfDescriptors();
-    for (auto i = 0; i < bd_count; i++) {
+    for (auto i = 0; i < bd_count; i++)
+    {
         /*printf("%d\tNEXT DESC: 0x%08x\r\n", i, curr_desc->nextdesc);
         printf("%d\tBUFF ADDR: 0x%08x\r\n", i, curr_desc->buffer_addr);*/
         printf("%d\tCTRL REGR: 0x%08x\r\n", i, curr_desc->control);
